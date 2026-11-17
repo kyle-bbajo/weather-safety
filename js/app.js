@@ -112,8 +112,8 @@ const num = v => { // "강수없음", "1mm 미만", "1.0mm", "적설없음", "1c
   if (s.includes("미만")) return 0.5;
   const f = parseFloat(s); return isNaN(f) ? 0 : f;
 };
-async function kmaForecast(g) {
-  const items = await kmaItems("getVilageFcst", latestVilageBase(), g);
+async function kmaForecast(g) { return parseVilage(await kmaItems("getVilageFcst", latestVilageBase(), g)); }
+function parseVilage(items) {
   const byTime = {};
   for (const it of items) {
     const k = it.fcstDate.slice(0, 4) + "-" + it.fcstDate.slice(4, 6) + "-" + it.fcstDate.slice(6, 8) + "T" + it.fcstTime.slice(0, 2) + ":00";
@@ -126,11 +126,32 @@ async function kmaForecast(g) {
   }));
 }
 async function kmaNow(g) {
-  const pick = items => Object.fromEntries(items.map(i => [i.category, +i.obsrValue]));
-  const now = pick(await kmaItems("getUltraSrtNcst", ncstBase(0), g));
-  let yT = null;
-  try { yT = pick(await kmaItems("getUltraSrtNcst", ncstBase(1), g)).T1H; } catch (e) { /* 어제 값이 없으면 비교 생략 */ }
-  return { temp: now.T1H, rh: now.REH, wsd: now.WSD, vec: now.VEC, pty: now.PTY, yTemp: yT };
+  const now = await kmaItems("getUltraSrtNcst", ncstBase(0), g);
+  let y = null;
+  try { y = await kmaItems("getUltraSrtNcst", ncstBase(1), g); } catch (e) { /* 어제 값이 없으면 비교 생략 */ }
+  return parseNow(now, y);
+}
+function parseNow(items, itemsY) {
+  const pick = it => Object.fromEntries((it || []).map(i => [i.category, +i.obsrValue]));
+  const now = pick(items), y = itemsY ? pick(itemsY) : {};
+  if (now.T1H == null) return null;
+  return { temp: now.T1H, rh: now.REH, wsd: now.WSD, vec: now.VEC, pty: now.PTY, yTemp: y.T1H ?? null };
+}
+
+/* ===== 저장소에 30분마다 저장되는 기상청 자료 (GitHub Actions, 인증키 숨김) ===== */
+async function kmaFromJSON() {
+  const js = await getJSON(CONFIG.KMA_JSON + "?t=" + Math.floor(Date.now() / 600000), 7000);
+  const age = (Date.now() - Date.parse(js.updatedAt)) / 3600e3;
+  if (!(age < 6)) throw new Error("자료가 오래됨 (" + age.toFixed(1) + "시간)");
+  GRIDS = DONGS.map(d => toGrid(d.lat, d.lon));
+  const fc = [], now = [];
+  for (const g of GRIDS) {
+    const k = js.grids[g.nx + "," + g.ny];
+    if (!k || !k.vilage) throw new Error("격자 자료 없음 " + g.nx + "," + g.ny);
+    fc.push(parseVilage(k.vilage)); now.push(parseNow(k.ncst, k.ncstY));
+  }
+  const u = new Date(Date.parse(js.updatedAt) + 9 * 3600e3);
+  return { fc, now, at: u.getUTCHours() + "시 " + pad2(u.getUTCMinutes()) + "분" };
 }
 
 /* ===== 예비: Open-Meteo ===== */
@@ -397,8 +418,12 @@ async function loadNow(i) { // 기상청 실황(현재 기온·어제와 비교)
   try { DATA.now[i] = await kmaNow(GRIDS[i]); if (SEL === i) renderWeather(); } catch (e) { console.warn("실황 실패:", e); }
 }
 async function load() {
-  let fc = null, now = null, source = "", surface = false, kind = "";
-  if (CONFIG.KMA_PROXY || CONFIG.KMA_KEY) {
+  let fc = null, now = null, source = "", surface = false, kind = "", at = "";
+  if (CONFIG.KMA_JSON) {
+    try { const r = await kmaFromJSON(); fc = r.fc; now = r.now; at = r.at; source = "기상청 단기예보·실황"; kind = "kmajson"; }
+    catch (e) { console.warn("저장된 기상청 자료 없음:", e.message); }
+  }
+  if (!fc && (CONFIG.KMA_PROXY || CONFIG.KMA_KEY)) {
     try {
       GRIDS = DONGS.map(d => toGrid(d.lat, d.lon));
       const uniq = [...new Set(GRIDS.map(g => g.nx + "," + g.ny))], got = {};
@@ -418,7 +443,7 @@ async function load() {
     return pick;
   });
   const n = kstNow();
-  DATA = { fc, now, city, source, surface, kind, fetchedAt: n.getUTCHours() + "시 " + pad2(n.getUTCMinutes()) + "분" };
+  DATA = { fc, now, city, source, surface, kind, fetchedAt: at || (n.getUTCHours() + "시 " + pad2(n.getUTCMinutes()) + "분") };
   renderWeather(); renderRisk(); loadNow(SEL);
 }
 

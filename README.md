@@ -9,7 +9,9 @@ index.html        화면 (문구·구성)
 css/style.css     디자인
 js/config.js      설정 (구글 폼 링크, 인증키, 지도 키) ← 보통 이것만 고칩니다
 js/app.js         동작 (기상청 예보·실황 → 날씨 카드, 결빙 위험, 옷차림, 지도)
-api/kma.js        기상청 중계 서버 (인증키를 숨김, Vercel에 올릴 때 사용)
+scripts/fetch-kma.mjs        기상청 예보·실황을 받아 data/kma.json 저장 (GitHub Actions에서 실행)
+.github/workflows/pages.yml  30분마다 예보 갱신 + GitHub Pages 배포
+api/kma.js        기상청 중계 서버 (Vercel에 올릴 때만 사용)
 package.json      Vercel 서버 함수 설정
 ```
 
@@ -29,14 +31,20 @@ package.json      Vercel 서버 함수 설정
 | CONTACT | 하단 문의처 문구 |
 | GOATCOUNTER | 방문자 수 세기(선택) |
 
-## 3. 인터넷에 올리기 (Vercel, 무료)
-1. vercel.com 가입 → New Project → 이 폴더를 올리거나 GitHub 저장소 연결
-2. Settings → Environment Variables → `KMA_KEY` = 공공데이터포털 인증키
-3. `js/config.js`에서 `KMA_PROXY: "/api/kma"`, `KMA_KEY: ""`로 바꾸고 다시 배포
-4. 브이월드 키를 쓸 경우, 발급받을 때 이 사이트 주소를 서비스 주소로 등록
+## 3. 인터넷에 올리기 (GitHub Pages, 무료 · 권장)
+1. 저장소 Settings → Secrets and variables → Actions → New repository secret
+   - Name: `KMA_KEY`, Secret: 공공데이터포털 인증키 (기상청_단기예보 활용신청 필요)
+2. Settings → Pages → Build and deployment → Source: **GitHub Actions**
+3. Actions 탭 → "기상청 예보 갱신 및 배포" → Run workflow
+4. 주소: `https://kyle-bbajo.github.io/weather-safety/`
 
-정적 호스팅(GitHub Pages 등)에 올릴 때는 `api/` 폴더가 동작하지 않으니
-KMA_KEY를 직접 넣는 방식으로만 쓸 수 있습니다(키가 공개됨).
+인증키는 Secret에만 있고 공개 코드·페이지에는 드러나지 않습니다.
+30분마다 기상청 자료를 새로 받아 `data/kma.json`으로 함께 배포합니다.
+기상청 자료가 없거나 6시간 넘게 오래되면 예비 예보(Open-Meteo), 그것도 안 되면 예시 화면을 보여 줍니다.
+
+### (선택) Vercel로 올리기
+Vercel에서 이 저장소를 Import하고 Environment Variables에 `KMA_KEY`를 넣은 뒤,
+`js/config.js`에서 `KMA_PROXY: "/api/kma"`로 바꾸면 실시간 중계 방식으로 동작합니다.
 
 ## 4. 검증 지표
 - 구글 폼 응답 수 = 사전 신청자 수
