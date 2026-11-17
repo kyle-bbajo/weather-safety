@@ -363,12 +363,24 @@ let MAP = null, CIRCLES = [];
 function initMap() {
   if (MAP || typeof L === "undefined") return;
   MAP = L.map("map", { scrollWheelZoom: false }).setView([37.362, 126.982], 12);
+  const osm = () => L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap 기여자" });
   if (CONFIG.VWORLD_KEY) {
-    L.tileLayer("https://api.vworld.kr/req/wmts/1.0.0/" + CONFIG.VWORLD_KEY + "/Base/{z}/{y}/{x}.png",
-      { maxZoom: 19, minZoom: 6, attribution: "© 브이월드(국토교통부)" }).addTo(MAP);
+    // 브이월드 지도가 안 뜨면(키 만료·주소 미등록 등) OpenStreetMap으로 자동 전환
+    let loaded = 0, failed = 0;
+    const vw = L.tileLayer("https://api.vworld.kr/req/wmts/1.0.0/" + CONFIG.VWORLD_KEY + "/Base/{z}/{y}/{x}.png",
+      { maxZoom: 19, minZoom: 6, attribution: "© 브이월드(국토교통부)" });
+    vw.on("tileload", () => { loaded++; });
+    vw.on("tileerror", () => {
+      if (++failed >= 4 && loaded === 0 && MAP.hasLayer(vw)) {
+        MAP.removeLayer(vw); osm().addTo(MAP);
+        document.getElementById("mapSrc").textContent = "OpenStreetMap 기여자";
+        console.warn("브이월드 지도를 불러오지 못해 OpenStreetMap으로 바꿨습니다.");
+      }
+    });
+    vw.addTo(MAP);
     document.getElementById("mapSrc").textContent = "브이월드(국토교통부)";
   } else {
-    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap 기여자" }).addTo(MAP);
+    osm().addTo(MAP);
   }
 }
 function drawMap(levels) {
