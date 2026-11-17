@@ -90,8 +90,8 @@ function latestVilageBase() { // 단기예보: 02·05·08·11·14·17·20·23시
   if (h === undefined) { t.setUTCDate(t.getUTCDate() - 1); h = 23; }
   return { date: ymdOf(t), time: pad2(h) + "00" };
 }
-function ncstBase(daysAgo) { // 초단기실황: 매시 정각 관측, 약 40분 뒤 제공
-  const t = new Date(kstNow().getTime() - 45 * 60e3 - (daysAgo || 0) * 86400e3);
+function ncstBase(hoursAgo) { // 초단기실황: 매시 정각 관측, 약 40분 뒤 제공, 최근 24시간까지만
+  const t = new Date(kstNow().getTime() - 45 * 60e3 - (hoursAgo || 0) * 3600e3);
   return { date: ymdOf(t), time: pad2(t.getUTCHours()) + "00" };
 }
 function kmaURL(op, b, g) {
@@ -128,7 +128,7 @@ function parseVilage(items) {
 async function kmaNow(g) {
   const now = await kmaItems("getUltraSrtNcst", ncstBase(0), g);
   let y = null;
-  try { y = await kmaItems("getUltraSrtNcst", ncstBase(1), g); } catch (e) { /* 어제 값이 없으면 비교 생략 */ }
+  try { y = await kmaItems("getUltraSrtNcst", ncstBase(23), g); } catch (e) { /* 어제 값이 없으면 비교 생략 */ }
   return parseNow(now, y);
 }
 function parseNow(items, itemsY) {

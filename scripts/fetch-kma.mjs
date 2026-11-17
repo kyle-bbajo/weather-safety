@@ -32,8 +32,9 @@ function vilageBase() {
   if (h === undefined) { t.setUTCDate(t.getUTCDate() - 1); h = 23; }
   return { date: ymd(t), time: pad2(h) + "00" };
 }
-function ncstBase(daysAgo) {
-  const t = new Date(kst().getTime() - 45 * 60e3 - daysAgo * 86400e3);
+// 초단기실황은 최근 24시간까지만 제공되어, '어제 이맘때'는 23시간 전 관측으로 비교
+function ncstBase(hoursAgo) {
+  const t = new Date(kst().getTime() - 45 * 60e3 - hoursAgo * 3600e3);
   return { date: ymd(t), time: pad2(t.getUTCHours()) + "00" };
 }
 
@@ -49,6 +50,7 @@ async function call(op, b, g) {
       throw new Error(js.response?.header?.resultMsg || "응답 오류");
     } catch (e) {
       console.log(op, g, "시도", i + 1, "실패:", e.message);
+      if (/최근 1일/.test(e.message)) break; // 기간 밖 요청은 다시 해도 같음
       await new Promise(res => setTimeout(res, 3000));
     }
   }
@@ -62,7 +64,7 @@ for (const k of grids) {
   const [nx, ny] = k.split(",").map(Number), g = { nx, ny };
   const vilage = await call("getVilageFcst", out.vilageBase, g);
   const ncst = await call("getUltraSrtNcst", ncstBase(0), g);
-  const ncstY = await call("getUltraSrtNcst", ncstBase(1), g);
+  const ncstY = await call("getUltraSrtNcst", ncstBase(23), g);
   if (vilage) ok++;
   out.grids[k] = { vilage, ncst, ncstY };
 }
