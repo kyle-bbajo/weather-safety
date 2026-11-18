@@ -1,6 +1,6 @@
 /* ===== 신청 버튼 · 방문자 수 ===== */
 (function () {
-  const map = [["btnResident", CONFIG.RESIDENT_FORM], ["btnOrg", CONFIG.ORG_FORM || CONFIG.RESIDENT_FORM]];
+  const map = [];
   for (const [id, url] of map) {
     const a = document.getElementById(id);
     if (!a) continue;
