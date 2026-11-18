@@ -6,8 +6,13 @@ import { writeFile, mkdir } from "node:fs/promises";
 
 const OVERPASS = [
   "https://overpass-api.de/api/interpreter",
+  "https://overpass.private.coffee/api/interpreter",
+  "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
   "https://overpass.kumi.systems/api/interpreter"
 ];
+// Overpass·지형 서버는 이름(User-Agent) 없는 요청을 거절함
+const UA = { "User-Agent": "weather-safety/1.0 (+https://github.com/kyle-bbajo/weather-safety)", "Accept": "application/json" };
+const sleep = ms => new Promise(r => setTimeout(r, ms));
 const QUERY = `[out:json][timeout:120];
 area["name"="의왕시"]["admin_level"="6"]->.a;
 way(area.a)["highway"~"^(residential|living_street|footway|pedestrian|path|steps|unclassified|tertiary|secondary|service)$"]["area"!="yes"];
@@ -29,13 +34,18 @@ const nearestDong = p => {
 };
 
 async function overpass() {
-  for (const url of OVERPASS) {
-    try {
-      const r = await fetch(url, { method: "POST", body: "data=" + encodeURIComponent(QUERY),
-        headers: { "Content-Type": "application/x-www-form-urlencoded" }, signal: AbortSignal.timeout(150000) });
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      return (await r.json()).elements || [];
-    } catch (e) { console.log("Overpass 실패:", url, e.message); }
+  for (let round = 0; round < 3; round++) {
+    if (round) await sleep(30000 * round);
+    for (const url of OVERPASS) {
+      try {
+        const r = await fetch(url, { method: "POST", body: "data=" + encodeURIComponent(QUERY),
+          headers: { ...UA, "Content-Type": "application/x-www-form-urlencoded" }, signal: AbortSignal.timeout(150000) });
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        const els = (await r.json()).elements || [];
+        if (els.length) { console.log("Overpass 성공:", url, els.length + "개 길"); return els; }
+        throw new Error("빈 결과");
+      } catch (e) { console.log("Overpass 실패:", url, e.message); }
+    }
   }
   return null;
 }
@@ -59,7 +69,7 @@ async function elevations(points) { // points: [[lat,lon],...] → 높이(m) 배
       "&longitude=" + chunk.map(p => p[1].toFixed(5)).join(",");
     for (let t = 0; t < 3; t++) {
       try {
-        const r = await fetch(url, { signal: AbortSignal.timeout(30000) });
+        const r = await fetch(url, { headers: UA, signal: AbortSignal.timeout(30000) });
         const js = await r.json();
         if (!Array.isArray(js.elevation)) throw new Error(js.reason || "응답 오류");
         js.elevation.forEach((e, k) => { res[i + k] = e; });
