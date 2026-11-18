@@ -383,15 +383,74 @@ function initMap() {
     osm().addTo(MAP);
   }
 }
+/* ===== 골목별 위험 (길 모양 · 경사 · 동별 예보) ===== */
+let ROADS = null, ROAD_LAYER = null, ROAD_LINES = [];
+async function loadRoads() {
+  if (!CONFIG.ROADS_JSON) return;
+  try { const js = await getJSON(CONFIG.ROADS_JSON, 15000); if (js && js.segs && js.segs.length) { ROADS = js.segs; if (DATA) renderRisk(); } }
+  catch (e) { console.warn("골목 자료 없음:", e.message); }
+}
+// 구간 위험도 = 동 예보 위험도에 경사·계단을 더해 계산 (예보가 '낮음'이면 구간도 낮음)
+function segRisk(sg, dong) {
+  const why = [];
+  let bonus = 0;
+  if (sg.t === "steps") bonus += 2; // 종류(계단)는 따로 표시
+  if (sg.g != null && sg.g >= 8) { bonus += 2; why.push("급경사 " + sg.g + "%"); }
+  else if (sg.g != null && sg.g >= 4) { bonus += 1; why.push("경사 " + sg.g + "%"); }
+  bonus = Math.min(bonus, 2);
+  if (dong.lv === 0) return { lv: 0, why: why.length ? why.join(" · ") + " (오늘 밤 결빙 가능성 낮음)" : "결빙 가능성 낮음" };
+  if (dong.why) why.push(dong.why);
+  return { lv: Math.max(0, Math.min(3, dong.lv - 1 + bonus)), why: why.join(" · ") };
+}
+const segName = sg => (sg.n ? sg.n : "이름 없는 " + sg.k) + " · " + DONGS[sg.d].name;
+function segPopup(sg, r) {
+  return "<b>" + segName(sg) + "</b><br>위험도 <b style=\"color:" + LV_HEX[r.lv] + "\">" + LV[r.lv] + "</b><br>" +
+    sg.k + " · 길이 " + sg.len + "m" + (sg.g != null ? " · 경사 " + sg.g + "%" : "") + "<br>이유: " + r.why;
+}
+function drawRoads(levels) {
+  const rep = document.getElementById("report");
+  if (!ROADS || !MAP) { if (rep) rep.hidden = true; return; }
+  if (!ROAD_LAYER) ROAD_LAYER = L.layerGroup().addTo(MAP);
+  ROAD_LAYER.clearLayers(); ROAD_LINES = [];
+  const renderer = L.canvas({ padding: 0.3 });
+  const count = [0, 0, 0, 0];
+  const rows = ROADS.map((sg, i) => {
+    const r = segRisk(sg, levels[sg.d]); count[r.lv]++;
+    const line = L.polyline(sg.c, { renderer, color: LV_HEX[r.lv], weight: r.lv >= 2 ? 5 : r.lv === 1 ? 3.5 : 2, opacity: r.lv ? 0.9 : 0.55 })
+      .bindPopup(segPopup(sg, r)).addTo(ROAD_LAYER);
+    ROAD_LINES[i] = line;
+    return { i, sg, r };
+  });
+  // 리포트: 위험한 구간 순서 (위험도 → 경사 → 길이)
+  rows.sort((a, b) => b.r.lv - a.r.lv || (b.sg.g || 0) - (a.sg.g || 0) || b.sg.len - a.sg.len);
+  document.getElementById("repWhen").textContent = "· " + nightWindow(DATA.city, NIGHT).label + " · 전체 " + ROADS.length + "개 구간";
+  document.getElementById("repSum").innerHTML = [3, 2, 1, 0].map(l => '<span style="background:' + LV_HEX[l] + '">' + LV[l] + " " + count[l] + "</span>").join("");
+  const list = document.getElementById("repList"); list.innerHTML = "";
+  rows.slice(0, 12).forEach(({ i, sg, r }) => {
+    const li = document.createElement("li"); li.style.borderLeftColor = LV_HEX[r.lv];
+    li.innerHTML = "<div><b></b><span class=\"why\"></span></div><span class=\"lv\"></span>";
+    li.querySelector("b").textContent = segName(sg);
+    li.querySelector(".why").textContent = sg.k + " · " + sg.len + "m · " + r.why;
+    const lv = li.querySelector(".lv"); lv.textContent = LV[r.lv]; lv.style.color = LV_HEX[r.lv];
+    li.addEventListener("click", () => {
+      document.getElementById("map").scrollIntoView({ behavior: "smooth", block: "center" });
+      MAP.fitBounds(ROAD_LINES[i].getBounds(), { maxZoom: 17 }); ROAD_LINES[i].openPopup();
+    });
+    list.appendChild(li);
+  });
+  rep.hidden = false;
+}
+
 function drawMap(levels) {
   initMap(); if (!MAP) return;
   CIRCLES.forEach(c => c.remove()); CIRCLES = [];
   DONGS.forEach((d, i) => {
     const lv = levels[i].lv;
-    CIRCLES.push(L.circle([d.lat, d.lon], { radius: 900, color: LV_HEX[lv], weight: 2, fillColor: LV_HEX[lv], fillOpacity: 0.45 })
+    CIRCLES.push(L.circle([d.lat, d.lon], { radius: 900, color: LV_HEX[lv], weight: ROADS ? 1 : 2, fillColor: LV_HEX[lv], fillOpacity: ROADS ? 0.08 : 0.45, interactive: !ROADS })
       .bindTooltip(d.name + " · " + LV[lv], { permanent: true, direction: "center" })
       .on("click", () => selectDong(i)).addTo(MAP));
   });
+  drawRoads(levels);
 }
 
 /* ===== 결빙 카드 · 동별 ===== */
@@ -477,4 +536,5 @@ async function load() {
 })();
 
 load();
+loadRoads();
 setInterval(() => { if (DATA && DATA.kind === "kma") DATA.now = DONGS.map(() => null); load(); }, 30 * 60 * 1000); // 30분마다 갱신

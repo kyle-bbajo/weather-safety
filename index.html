@@ -97,9 +97,17 @@
         <ul id="wearList"></ul>
       </div>
 
-      <h3 style="margin-top:18px">동별 위험 지도</h3>
-      <div id="map" role="img" aria-label="의왕시 동별 결빙 위험 지도"></div>
+      <h3 style="margin-top:18px">골목별 위험 지도</h3>
+      <p class="small" style="margin-top:4px">길을 누르면 그 구간의 리포트가 보입니다. 동 원은 지도를 확대하면 골목 색으로 바뀝니다.</p>
+      <div id="map" role="img" aria-label="의왕시 골목별 결빙 위험 지도"></div>
       <div class="dongs" id="dongs"></div>
+
+      <div class="report" id="report" hidden>
+        <h3>골목별 위험 리포트 <span class="small" id="repWhen"></span></h3>
+        <div class="rep-sum" id="repSum"></div>
+        <ol class="rep-list" id="repList"></ol>
+        <p class="small" id="repNote">공공데이터(기상청 예보 · 길 모양 · 지형 경사)로 계산한 예측입니다. 시범 기간에는 발·허리 센서와 실버카의 실제 걸음으로 확인해 고쳐 갑니다.</p>
+      </div>
 
       <div class="legend" aria-hidden="true">
         <span><i style="background:var(--r0)"></i>낮음</span>

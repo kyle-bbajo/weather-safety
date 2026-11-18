@@ -9,6 +9,7 @@ index.html        화면 (문구·구성)
 css/style.css     디자인
 js/config.js      설정 (구글 폼 링크, 인증키, 지도 키) ← 보통 이것만 고칩니다
 js/app.js         동작 (기상청 예보·실황 → 날씨 카드, 결빙 위험, 옷차림, 지도)
+scripts/build-roads.mjs      의왕 골목·보도·계단 구간과 경사 계산 → data/roads.json (OpenStreetMap, Open-Meteo 지형)
 scripts/fetch-kma.mjs        기상청 예보·실황을 받아 data/kma.json 저장 (GitHub Actions에서 실행)
 .github/workflows/pages.yml  30분마다 예보 갱신 + GitHub Pages 배포
 api/kma.js        기상청 중계 서버 (Vercel에 올릴 때만 사용)

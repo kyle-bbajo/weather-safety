@@ -34,6 +34,15 @@ jobs:
         run: node scripts/fetch-kma.mjs
         env:
           KMA_KEY: ${{ secrets.KMA_KEY }}
+      - name: 골목 자료 캐시
+        id: roads
+        uses: actions/cache@v4
+        with:
+          path: data/roads.json
+          key: roads-v1
+      - name: 골목·경사 자료 만들기 (처음 한 번)
+        if: steps.roads.outputs.cache-hit != 'true'
+        run: node scripts/build-roads.mjs
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
