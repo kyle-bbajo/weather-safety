@@ -67,15 +67,22 @@ async function elevations(points) { // points: [[lat,lon],...] → 높이(m) 배
     const chunk = points.slice(i, i + 100);
     const url = "https://api.open-meteo.com/v1/elevation?latitude=" + chunk.map(p => p[0].toFixed(5)).join(",") +
       "&longitude=" + chunk.map(p => p[1].toFixed(5)).join(",");
-    for (let t = 0; t < 3; t++) {
+    // 무료 한도는 분당 약 600개 지점 → 100개 묶음을 11초 간격으로, 한도에 걸리면 1분 쉬고 다시
+    for (let t = 0; t < 5; t++) {
       try {
         const r = await fetch(url, { headers: UA, signal: AbortSignal.timeout(30000) });
         const js = await r.json();
         if (!Array.isArray(js.elevation)) throw new Error(js.reason || "응답 오류");
         js.elevation.forEach((e, k) => { res[i + k] = e; });
         break;
-      } catch (e) { console.log("높이 자료 실패", i, e.message); await new Promise(s => setTimeout(s, 2000)); }
+      } catch (e) {
+        const limit = /limit/i.test(e.message);
+        console.log("높이 자료 실패", i, e.message, limit ? "→ 65초 대기" : "");
+        await sleep(limit ? 65000 : 3000);
+      }
     }
+    if (i % 1000 === 0) console.log("높이 자료", Math.min(i + 100, points.length) + "/" + points.length);
+    await sleep(11000);
   }
   return res;
 }
@@ -103,6 +110,9 @@ const pts = [], idx = new Map();
 const key = p => p[0] + "," + p[1];
 for (const s of segs) for (const p of [s.c[0], s.c[s.c.length - 1]]) if (!idx.has(key(p))) { idx.set(key(p), pts.length); pts.push(p); }
 const el = await elevations(pts);
+const got = el.filter(e => e != null).length;
+console.log("높이 받은 지점:", got + "/" + pts.length);
+if (got < pts.length * 0.9) { console.log("높이 자료가 부족해 저장하지 않음 (다음 실행 때 다시)"); process.exit(0); }
 for (const s of segs) {
   const a = el[idx.get(key(s.c[0]))], b = el[idx.get(key(s.c[s.c.length - 1]))];
   s.g = (a != null && b != null && s.len > 0) ? +(Math.abs(b - a) / s.len * 100).toFixed(1) : null; // 경사 %

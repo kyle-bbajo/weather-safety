@@ -39,7 +39,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: data/roads.json
-          key: roads-v1
+          key: roads-v2
       - name: 골목·경사 자료 만들기 (처음 한 번)
         if: steps.roads.outputs.cache-hit != 'true'
         run: node scripts/build-roads.mjs
